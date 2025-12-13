@@ -22,11 +22,12 @@ jobs:
           gettext git libncurses-dev libssl-dev python3 \
           rsync unzip zlib1g-dev file wget
 
-    - name: Download OpenWrt SDK (x86_64)
+    - name: Download OpenWrt SDK (ARM64)
       run: |
-        wget https://downloads.openwrt.org/releases/23.05.5/targets/x86/64/openwrt-sdk-23.05.5-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz
-        tar -xf openwrt-sdk-*.tar.xz
-        mv openwrt-sdk-* openwrt-sdk
+        mkdir openwrt-sdk
+        wget -O sdk.tar.xz https://downloads.openwrt.org/releases/23.05.5/targets/armvirt/64/openwrt-sdk-23.05.5-armvirt-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz
+        tar -xf sdk.tar.xz -C openwrt-sdk --strip-components=1
+
 
     - name: Add echworker package
       run: |
