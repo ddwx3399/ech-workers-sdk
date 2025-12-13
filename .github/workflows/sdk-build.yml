@@ -39,4 +39,62 @@ jobs:
       run: |
         cd openwrt
         cat > .config << 'EOF'
-        CONFIG_TARGET_armv
+        CONFIG_TARGET_armvirt=y
+        CONFIG_TARGET_armvirt_64=y
+        CONFIG_TARGET_armvirt_64_Default=y
+        CONFIG_CCACHE=y
+        EOF
+        make defconfig
+
+    - name: Update feeds
+      run: |
+        cd openwrt
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
+
+    - name: Add echworker packages
+      run: |
+        cd openwrt
+        git clone https://github.com/ntbowen/echworker-for-openwrt.git \
+          package/echworker-for-openwrt
+
+        # 移除 dns2socks 依赖（CI 必须）
+        sed -i 's/+dns2socks//g' \
+          package/echworker-for-openwrt/luci-app-echworkers/Makefile
+
+    - name: Enable packages
+      run: |
+        cd openwrt
+        echo "CONFIG_PACKAGE_echworker=m" >> .config
+        echo "CONFIG_PACKAGE_luci-app-echworkers=m" >> .config
+        make defconfig
+
+    - name: Build toolchain
+      run: |
+        cd openwrt
+        make toolchain/install -j$(nproc)
+
+    - name: Build echworker
+      run: |
+        cd openwrt
+        make package/echworker/compile -j$(nproc) V=s
+
+    - name: Build luci-app
+      run: |
+        cd openwrt
+        make package/luci-app-echworkers/compile -j$(nproc) V=s
+
+    - name: Collect IPK
+      run: |
+        mkdir -p output
+        find openwrt/bin/packages \
+          -name "*echworker*.ipk" \
+          -exec cp {} output/ \;
+
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: echworker-armvirt-${{ github.run_number }}
+        files: output/*.ipk
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
