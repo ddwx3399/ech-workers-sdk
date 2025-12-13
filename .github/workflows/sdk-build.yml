@@ -45,19 +45,23 @@ jobs:
         git clone https://github.com/ntbowen/echworker-for-openwrt.git \
           package/echworker-for-openwrt
 
+    # ⭐ 关键修复点
+    - name: Enable echworker packages
+      run: |
+        cd openwrt
+        echo "CONFIG_PACKAGE_echworker=m" >> .config
+        echo "CONFIG_PACKAGE_luci-app-echworkers=m" >> .config
+        make defconfig
+
     - name: Build toolchain
       run: |
         cd openwrt
         make toolchain/install -j$(nproc)
 
-    - name: Build echworker
+    - name: Build echworker & luci-app
       run: |
         cd openwrt
         make package/echworker/compile -j$(nproc) V=s
-
-    - name: Build luci-app-echworkers
-      run: |
-        cd openwrt
         make package/luci-app-echworkers/compile -j$(nproc) V=s
 
     - name: Collect IPK
