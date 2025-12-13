@@ -1,10 +1,7 @@
-name: Build echworker for OpenWrt
+name: Build echworker for Phicomm N1 (ARM64 SDK)
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
 
 jobs:
   build:
@@ -14,30 +11,45 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Prepare build environment
+    - name: Install build dependencies
       run: |
         sudo apt update
         sudo apt install -y \
-          build-essential clang flex g++ gawk gcc-multilib \
-          gettext git libncurses-dev libssl-dev python3 python3-distutils \
+          build-essential clang flex g++ gawk \
+          gettext git libncurses-dev libssl-dev python3 \
           rsync unzip zlib1g-dev file wget
-          
-      - name: Download OpenWrt SDK (armvirt-64)
-        run: |
-          mkdir openwrt-sdk
-          wget -O sdk.tar.xz \
-            https://downloads.openwrt.org/releases/23.05.5/targets/armvirt/64/openwrt-sdk-23.05.5-armvirt-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz
-          tar -xf sdk.tar.xz -C openwrt-sdk --strip-components=1
-      
-      - name: Add echworker package
-        run: |
-          cd openwrt-sdk
-          git clone https://github.com/ntbowen/echworker-for-openwrt.git \
-            package/echworker-for-openwrt
-      
-      - name: Build echworker
-        run: |
-          cd openwrt-sdk
-          make defconfig
-          make package/echworker-for-openwrt/compile -j$(nproc) V=s
 
+    - name: Download OpenWrt SDK (armvirt-64 for N1)
+      run: |
+        mkdir openwrt-sdk
+        wget -O sdk.tar.xz \
+          https://downloads.openwrt.org/releases/23.05.5/targets/armvirt/64/openwrt-sdk-23.05.5-armvirt-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz
+        tar -xf sdk.tar.xz -C openwrt-sdk --strip-components=1
+
+    - name: Add echworker package
+      run: |
+        cd openwrt-sdk
+        git clone https://github.com/ntbowen/echworker-for-openwrt.git \
+          package/echworker-for-openwrt
+
+    # ⚠️ 不更新 feeds，避开 git.openwrt.org 503
+    - name: Prepare SDK
+      run: |
+        cd openwrt-sdk
+        make defconfig
+
+    - name: Build echworker ipk
+      run: |
+        cd openwrt-sdk
+        make package/echworker-for-openwrt/compile -j$(nproc) V=s
+
+    - name: Collect ipk
+      run: |
+        mkdir -p output
+        find openwrt-sdk/bin/packages -type f -name "*echworker*.ipk" -exec cp {} output/ \;
+
+    - name: Upload ipk
+      uses: actions/upload-artifact@v4
+      with:
+        name: echworker-phicomm-n1-ipk
+        path: output/
