@@ -1,4 +1,4 @@
-name: Build SDK + echworker for Phicomm N1 (armvirt-64)
+name: Build echworker (SDK only, armvirt-64)
 
 on:
   workflow_dispatch:
@@ -8,19 +8,19 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    - name: Checkout OpenWrt source
+    - name: Checkout OpenWrt
       uses: actions/checkout@v4
       with:
         repository: openwrt/openwrt
-        path: openwrt
         ref: v23.05.5
+        path: openwrt
 
     - name: Install build dependencies
       run: |
         sudo apt update
         sudo apt install -y \
-          build-essential clang flex g++ gawk \
-          gettext git libncurses-dev libssl-dev python3 \
+          build-essential clang flex g++ gawk gettext \
+          git libncurses-dev libssl-dev python3 \
           rsync unzip zlib1g-dev file wget
 
     - name: Configure target (armvirt-64)
@@ -33,11 +33,11 @@ jobs:
         EOF
         make defconfig
 
-    - name: Build SDK only (no firmware)
+    # ⭐ 关键：只用 make sdk（armvirt 安全）
+    - name: Build OpenWrt SDK
       run: |
         cd openwrt
-        make toolchain/install -j$(nproc)
-        make target/sdk/install -j$(nproc)
+        make sdk -j$(nproc)
 
     - name: Extract SDK
       run: |
@@ -46,13 +46,13 @@ jobs:
         SDK_FILE=$(ls bin/targets/armvirt/64/openwrt-sdk-*.tar.xz | head -n1)
         tar -xf "$SDK_FILE" -C sdk --strip-components=1
 
-    - name: Add echworker
+    - name: Add echworker package
       run: |
         cd openwrt/sdk
         git clone https://github.com/ntbowen/echworker-for-openwrt.git \
           package/echworker-for-openwrt
 
-    - name: Prepare SDK
+    - name: Prepare SDK config
       run: |
         cd openwrt/sdk
         make defconfig
@@ -69,7 +69,11 @@ jobs:
           -type f -name "*echworker*.ipk" \
           -exec cp {} output/ \;
 
-    - uses: actions/upload-artifact@v4
+    - name: Publish to GitHub Releases
+      uses: softprops/action-gh-release@v1
       with:
-        name: echworker-phicomm-n1-ipk
-        path: output/
+        tag_name: echworker-armvirt-${{ github.run_number }}
+        name: echworker armvirt-64
+        files: output/*.ipk
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
