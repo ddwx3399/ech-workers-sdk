@@ -1,4 +1,4 @@
-name: Build echworker + luci-app (armvirt-64)
+name: Build echworkers + luci-app (armvirt-64)
 
 on:
   workflow_dispatch:
@@ -39,17 +39,17 @@ jobs:
         ./scripts/feeds update -a
         ./scripts/feeds install -a
 
-    - name: Add echworker packages
+    - name: Add echworkers packages
       run: |
         cd openwrt
         git clone https://github.com/ntbowen/echworker-for-openwrt.git \
           package/echworker-for-openwrt
 
-    # ⭐ 关键修复点
-    - name: Enable echworker packages
+    # ⭐ 关键修正：正确的包名（复数）
+    - name: Enable echworkers packages
       run: |
         cd openwrt
-        echo "CONFIG_PACKAGE_echworker=m" >> .config
+        echo "CONFIG_PACKAGE_echworkers=m" >> .config
         echo "CONFIG_PACKAGE_luci-app-echworkers=m" >> .config
         make defconfig
 
@@ -58,24 +58,28 @@ jobs:
         cd openwrt
         make toolchain/install -j$(nproc)
 
-    - name: Build echworker & luci-app
+    - name: Build echworkers
       run: |
         cd openwrt
-        make package/echworker/compile -j$(nproc) V=s
+        make package/echworkers/compile -j$(nproc) V=s
+
+    - name: Build luci-app-echworkers
+      run: |
+        cd openwrt
         make package/luci-app-echworkers/compile -j$(nproc) V=s
 
     - name: Collect IPK
       run: |
         mkdir -p output
         find openwrt/bin/packages \
-          -type f \( -name "*echworker*.ipk" -o -name "*luci-app-echworkers*.ipk" \) \
+          -type f \( -name "*echworkers*.ipk" -o -name "*luci-app-echworkers*.ipk" \) \
           -exec cp {} output/ \;
 
     - name: Publish to GitHub Releases
       uses: softprops/action-gh-release@v1
       with:
-        tag_name: echworker-armvirt-${{ github.run_number }}
-        name: echworker armvirt-64
+        tag_name: echworkers-armvirt-${{ github.run_number }}
+        name: echworkers armvirt-64
         files: output/*.ipk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
