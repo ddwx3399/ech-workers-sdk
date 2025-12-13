@@ -1,4 +1,4 @@
-name: Build echworker (SDK only, armvirt-64)
+name: Build echworker (armvirt-64, no SDK tar)
 
 on:
   workflow_dispatch:
@@ -33,39 +33,33 @@ jobs:
         EOF
         make defconfig
 
-    # ⭐ 关键：只用 make sdk（armvirt 安全）
-    - name: Build OpenWrt SDK
+    - name: Update feeds
       run: |
         cd openwrt
-        make sdk -j$(nproc)
-
-    - name: Extract SDK
-      run: |
-        cd openwrt
-        mkdir sdk
-        SDK_FILE=$(ls bin/targets/armvirt/64/openwrt-sdk-*.tar.xz | head -n1)
-        tar -xf "$SDK_FILE" -C sdk --strip-components=1
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
 
     - name: Add echworker package
       run: |
-        cd openwrt/sdk
+        cd openwrt
         git clone https://github.com/ntbowen/echworker-for-openwrt.git \
           package/echworker-for-openwrt
 
-    - name: Prepare SDK config
+    # ⭐ 关键：只构建 toolchain + 目标包
+    - name: Build toolchain
       run: |
-        cd openwrt/sdk
-        make defconfig
+        cd openwrt
+        make toolchain/install -j$(nproc)
 
     - name: Build echworker
       run: |
-        cd openwrt/sdk
+        cd openwrt
         make package/echworker-for-openwrt/compile -j$(nproc) V=s
 
     - name: Collect IPK
       run: |
         mkdir -p output
-        find openwrt/sdk/bin/packages \
+        find openwrt/bin/packages \
           -type f -name "*echworker*.ipk" \
           -exec cp {} output/ \;
 
