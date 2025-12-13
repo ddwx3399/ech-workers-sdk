@@ -1,4 +1,4 @@
-name: Build echworker (armvirt-64, no SDK tar)
+name: Build echworker + luci-app (armvirt-64)
 
 on:
   workflow_dispatch:
@@ -39,13 +39,12 @@ jobs:
         ./scripts/feeds update -a
         ./scripts/feeds install -a
 
-    - name: Add echworker package
+    - name: Add echworker packages
       run: |
         cd openwrt
         git clone https://github.com/ntbowen/echworker-for-openwrt.git \
           package/echworker-for-openwrt
 
-    # ⭐ 关键：只构建 toolchain + 目标包
     - name: Build toolchain
       run: |
         cd openwrt
@@ -54,13 +53,18 @@ jobs:
     - name: Build echworker
       run: |
         cd openwrt
-        make package/echworker-for-openwrt/compile -j$(nproc) V=s
+        make package/echworker/compile -j$(nproc) V=s
+
+    - name: Build luci-app-echworkers
+      run: |
+        cd openwrt
+        make package/luci-app-echworkers/compile -j$(nproc) V=s
 
     - name: Collect IPK
       run: |
         mkdir -p output
         find openwrt/bin/packages \
-          -type f -name "*echworker*.ipk" \
+          -type f \( -name "*echworker*.ipk" -o -name "*luci-app-echworkers*.ipk" \) \
           -exec cp {} output/ \;
 
     - name: Publish to GitHub Releases
