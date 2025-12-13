@@ -1,4 +1,4 @@
-name: Build echworkers + luci-app (armvirt-64)
+name: Build echworker + luci (armvirt-64)
 
 on:
   workflow_dispatch:
@@ -6,6 +6,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
+
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
 
     steps:
     - name: Checkout OpenWrt
@@ -15,71 +18,25 @@ jobs:
         ref: v23.05.5
         path: openwrt
 
-    - name: Install build dependencies
+    - name: Install dependencies
       run: |
         sudo apt update
         sudo apt install -y \
           build-essential clang flex g++ gawk gettext \
           git libncurses-dev libssl-dev python3 \
-          rsync unzip zlib1g-dev file wget
+          rsync unzip zlib1g-dev file wget ccache
 
-    - name: Configure target (armvirt-64)
+    - name: Restore cache
+      uses: actions/cache@v4
+      with:
+        path: |
+          openwrt/staging_dir
+          openwrt/toolchain
+          .ccache
+        key: openwrt-armvirt-23.05
+
+    - name: Configure target
       run: |
         cd openwrt
         cat > .config << 'EOF'
-        CONFIG_TARGET_armvirt=y
-        CONFIG_TARGET_armvirt_64=y
-        CONFIG_TARGET_armvirt_64_Default=y
-        EOF
-        make defconfig
-
-    - name: Update feeds
-      run: |
-        cd openwrt
-        ./scripts/feeds update -a
-        ./scripts/feeds install -a
-
-    - name: Add echworkers packages
-      run: |
-        cd openwrt
-        git clone https://github.com/ntbowen/echworker-for-openwrt.git \
-          package/echworker-for-openwrt
-
-    # ⭐ 关键修正：正确的包名（复数）
-    - name: Enable echworkers packages
-      run: |
-        cd openwrt
-        echo "CONFIG_PACKAGE_echworkers=m" >> .config
-        echo "CONFIG_PACKAGE_luci-app-echworkers=m" >> .config
-        make defconfig
-
-    - name: Build toolchain
-      run: |
-        cd openwrt
-        make toolchain/install -j$(nproc)
-
-    - name: Build echworkers
-      run: |
-        cd openwrt
-        make package/echworkers/compile -j$(nproc) V=s
-
-    - name: Build luci-app-echworkers
-      run: |
-        cd openwrt
-        make package/luci-app-echworkers/compile -j$(nproc) V=s
-
-    - name: Collect IPK
-      run: |
-        mkdir -p output
-        find openwrt/bin/packages \
-          -type f \( -name "*echworkers*.ipk" -o -name "*luci-app-echworkers*.ipk" \) \
-          -exec cp {} output/ \;
-
-    - name: Publish to GitHub Releases
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: echworkers-armvirt-${{ github.run_number }}
-        name: echworkers armvirt-64
-        files: output/*.ipk
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        CONFIG_TARGET_armv
