@@ -70,4 +70,36 @@ jobs:
       run: |
         cd openwrt
         echo "CONFIG_PACKAGE_echworker=m" >> .config
-        echo "CONFIG_PACKAGE_luci-app-echworkers=
+        echo "CONFIG_PACKAGE_luci-app-echworkers=m" >> .config
+        make defconfig
+
+    - name: Build toolchain (cached)
+      run: |
+        cd openwrt
+        make toolchain/install -j$(nproc)
+
+    - name: Build echworker
+      run: |
+        cd openwrt
+        make package/echworker/compile -j$(nproc) V=s
+
+    - name: Build luci-app
+      run: |
+        cd openwrt
+        make package/luci-app-echworkers/compile -j$(nproc) V=s
+
+    - name: Collect IPK files
+      run: |
+        mkdir -p output
+        find openwrt/bin/packages \
+          -name "*echworker*.ipk" \
+          -exec cp {} output/ \;
+
+    - name: Publish to GitHub Releases
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: echworker-n1-${{ github.run_number }}
+        name: echworker N1 build #${{ github.run_number }}
+        files: output/*.ipk
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
