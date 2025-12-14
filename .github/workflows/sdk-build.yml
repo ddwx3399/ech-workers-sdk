@@ -35,6 +35,21 @@ jobs:
           .ccache
         key: openwrt-armvirt-23.05
 
+    - name: Add echworker feed (KEY STEP)
+      run: |
+        cd openwrt
+
+        # 用 src-link 引入第三方包（这是关键）
+        echo "src-link echworker https://github.com/ntbowen/echworker-for-openwrt.git" \
+          >> feeds.conf.default
+
+        ./scripts/feeds update echworker
+        ./scripts/feeds install -a -p echworker
+
+        # patch dns2socks
+        sed -i 's/+dns2socks//g' \
+          feeds/echworker/luci-app-echworkers/Makefile
+
     - name: Configure target
       run: |
         cd openwrt
@@ -43,34 +58,9 @@ jobs:
         CONFIG_TARGET_armvirt_64=y
         CONFIG_TARGET_armvirt_64_Default=y
         CONFIG_CCACHE=y
+        CONFIG_PACKAGE_echworker=m
+        CONFIG_PACKAGE_luci-app-echworkers=m
         EOF
-        make defconfig
-
-    - name: Update feeds
-      run: |
-        cd openwrt
-        ./scripts/feeds update -a
-        ./scripts/feeds install -a
-
-    - name: Add echworker packages (CORRECT WAY)
-      run: |
-        cd openwrt/package
-
-        git clone https://github.com/ntbowen/echworker-for-openwrt.git
-
-        # patch dns2socks
-        sed -i 's/+dns2socks//g' \
-          echworker-for-openwrt/luci-app-echworkers/Makefile
-
-        # 关键：软链接到 package 根目录
-        ln -s echworker-for-openwrt/echworker echworker
-        ln -s echworker-for-openwrt/luci-app-echworkers luci-app-echworkers
-
-    - name: Enable packages
-      run: |
-        cd openwrt
-        echo "CONFIG_PACKAGE_echworker=m" >> .config
-        echo "CONFIG_PACKAGE_luci-app-echworkers=m" >> .config
         make defconfig
 
     - name: Build toolchain
