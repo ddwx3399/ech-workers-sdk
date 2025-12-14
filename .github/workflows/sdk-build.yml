@@ -78,7 +78,8 @@ jobs:
     - name: Build echworker
       run: |
         cd openwrt
-        make package/echworker/compile -j$(nproc) V=s
+        make package/feeds/echworker/compile -j$(nproc) V=s
+
 
     - name: Build luci-app
       run: |
