@@ -35,20 +35,24 @@ jobs:
           .ccache
         key: openwrt-armvirt-23.05
 
-    - name: Add echworker feed (KEY STEP)
+    - name: Add echworker feed (FIXED)
       run: |
         cd openwrt
-
-        # 用 src-link 引入第三方包（这是关键）
+    
+        # 添加 src-link feed
         echo "src-link echworker https://github.com/ntbowen/echworker-for-openwrt.git" \
           >> feeds.conf.default
-
-        ./scripts/feeds update echworker
-        ./scripts/feeds install -a -p echworker
-
-        # patch dns2socks
+    
+        # 一定要 update 所有 feeds
+        ./scripts/feeds update -a
+    
+        # 安装所有 feeds（生成 index & rules）
+        ./scripts/feeds install -a
+    
+        # 现在路径一定存在，再 patch
         sed -i 's/+dns2socks//g' \
           feeds/echworker/luci-app-echworkers/Makefile
+
 
     - name: Configure target
       run: |
