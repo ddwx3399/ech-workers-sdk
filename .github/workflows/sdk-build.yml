@@ -1,4 +1,4 @@
-name: Build echworker (N1 / armvirt-64)
+name: Build echworker (N1 armvirt-64)
 
 on:
   workflow_dispatch:
@@ -11,14 +11,14 @@ jobs:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
 
     steps:
-    - name: Checkout OpenWrt 23.05
+    - name: Checkout OpenWrt
       uses: actions/checkout@v4
       with:
         repository: openwrt/openwrt
         ref: v23.05.5
         path: openwrt
 
-    - name: Install build dependencies
+    - name: Install deps
       run: |
         sudo apt update
         sudo apt install -y \
@@ -26,7 +26,7 @@ jobs:
           git libncurses-dev libssl-dev python3 \
           rsync unzip zlib1g-dev file wget ccache
 
-    - name: Restore build cache
+    - name: Restore cache
       uses: actions/cache@v4
       with:
         path: |
@@ -35,7 +35,7 @@ jobs:
           .ccache
         key: openwrt-armvirt-23.05
 
-    - name: Configure target (armvirt-64 / N1)
+    - name: Configure target
       run: |
         cd openwrt
         cat > .config << 'EOF'
@@ -46,34 +46,34 @@ jobs:
         EOF
         make defconfig
 
-    - name: Update & install feeds
+    - name: Update feeds
       run: |
         cd openwrt
         ./scripts/feeds update -a
         ./scripts/feeds install -a
 
-    - name: Add echworker packages
+    - name: Add echworker packages (CORRECT WAY)
       run: |
-        cd openwrt
+        cd openwrt/package
 
-        git clone https://github.com/ntbowen/echworker-for-openwrt.git \
-          package/echworker-for-openwrt
+        git clone https://github.com/ntbowen/echworker-for-openwrt.git
 
-        # 移除 dns2socks 依赖（23.05 无此包）
+        # patch dns2socks
         sed -i 's/+dns2socks//g' \
-          package/echworker-for-openwrt/luci-app-echworkers/Makefile
+          echworker-for-openwrt/luci-app-echworkers/Makefile
 
-        # 关键：让 OpenWrt 认识这两个包
-        ./scripts/feeds install -p echworker-for-openwrt echworker luci-app-echworkers
+        # 关键：软链接到 package 根目录
+        ln -s echworker-for-openwrt/echworker echworker
+        ln -s echworker-for-openwrt/luci-app-echworkers luci-app-echworkers
 
-    - name: Enable echworker packages
+    - name: Enable packages
       run: |
         cd openwrt
         echo "CONFIG_PACKAGE_echworker=m" >> .config
         echo "CONFIG_PACKAGE_luci-app-echworkers=m" >> .config
         make defconfig
 
-    - name: Build toolchain (cached)
+    - name: Build toolchain
       run: |
         cd openwrt
         make toolchain/install -j$(nproc)
@@ -88,18 +88,17 @@ jobs:
         cd openwrt
         make package/luci-app-echworkers/compile -j$(nproc) V=s
 
-    - name: Collect IPK files
+    - name: Collect IPK
       run: |
         mkdir -p output
         find openwrt/bin/packages \
           -name "*echworker*.ipk" \
           -exec cp {} output/ \;
 
-    - name: Publish to GitHub Releases
+    - name: Release
       uses: softprops/action-gh-release@v1
       with:
         tag_name: echworker-n1-${{ github.run_number }}
-        name: echworker N1 build #${{ github.run_number }}
         files: output/*.ipk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
