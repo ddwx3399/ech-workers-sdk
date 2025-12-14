@@ -35,23 +35,26 @@ jobs:
           .ccache
         key: openwrt-armvirt-23.05
 
-    - name: Add echworker feed (FIXED)
+    - name: Add echworker feed (ABSOLUTE FINAL FIX)
       run: |
         cd openwrt
     
-        # 添加 src-link feed
         echo "src-link echworker https://github.com/ntbowen/echworker-for-openwrt.git" \
           >> feeds.conf.default
     
-        # 一定要 update 所有 feeds
         ./scripts/feeds update -a
-    
-        # 安装所有 feeds（生成 index & rules）
         ./scripts/feeds install -a
     
-        # 现在路径一定存在，再 patch
-        sed -i 's/+dns2socks//g' \
-          feeds/echworker/luci-app-echworkers/Makefile
+        # === 关键修复：动态查找 luci Makefile ===
+        LUCI_MK=$(find package/feeds/echworker -maxdepth 2 -name Makefile | grep luci || true)
+    
+        if [ -n "$LUCI_MK" ]; then
+          echo "Patching $LUCI_MK"
+          sed -i 's/+dns2socks//g' "$LUCI_MK"
+        else
+          echo "No luci-app Makefile found, skip dns2socks patch"
+        fi
+
 
 
     - name: Configure target
