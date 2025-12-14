@@ -1,120 +1,97 @@
-name: Build echworker (OpenWrt SDK, armvirt-64)
+name: Build echworker (N1 armvirt-64, fast)
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ main ]
 
 env:
-  OPENWRT_BRANCH: openwrt-22.03
-  TARGET: armvirt
-  SUBTARGET: 64
-  SDK_NAME: openwrt-sdk-armvirt-64
-  FEED_NAME: echworker
+  CCACHE_DIR: ${{ github.workspace }}/.ccache
 
 jobs:
   build:
     runs-on: ubuntu-22.04
 
     steps:
-    - name: Checkout repo
+    - name: Checkout OpenWrt
       uses: actions/checkout@v4
+      with:
+        repository: openwrt/openwrt
+        ref: v23.05.5
+        path: openwrt
 
-    - name: Install build dependencies
+    - name: Install dependencies
       run: |
         sudo apt update
         sudo apt install -y \
-          build-essential clang flex bison g++ gawk \
-          gettext git libncurses-dev libssl-dev \
-          python3-distutils rsync unzip zlib1g-dev file wget
+          build-essential clang flex bison g++ gawk gettext \
+          git libncurses-dev libssl-dev python3 \
+          rsync unzip zlib1g-dev file wget ccache
 
-    # --------------------------------------------------
-    # 1️⃣ 下载 SDK（22.03：armvirt/64 只有 snapshot 有 SDK）
-    # --------------------------------------------------
-    - name: Download OpenWrt SDK
-      run: |
-        mkdir openwrt
-        wget -qO sdk.tar.xz \
-          https://downloads.openwrt.org/snapshots/targets/armvirt/64/openwrt-sdk-armvirt-64_gcc-11.2.0_musl.Linux-x86_64.tar.xz
-        tar -xf sdk.tar.xz -C openwrt --strip-components=1
-
-    # --------------------------------------------------
-    # 2️⃣ cache（关键：直接砍掉 30 分钟）
-    # --------------------------------------------------
-    - name: Cache OpenWrt SDK
+    - name: Restore cache
       uses: actions/cache@v4
       with:
         path: |
           openwrt/staging_dir
-          openwrt/build_dir
-          openwrt/dl
-        key: ${{ runner.os }}-openwrt-${{ env.TARGET }}-${{ env.SUBTARGET }}-sdk-v1
+          openwrt/toolchain
+          .ccache
+          openwrt/tmp
+        key: openwrt-armvirt-23.05-fast
 
-    # --------------------------------------------------
-    # 3️⃣ 注入 echworker feed
-    # --------------------------------------------------
-    - name: Add echworker feed
+    - name: Add echworker feed and patch luci
       run: |
         cd openwrt
-        echo "src-git echworker https://github.com/ntbowen/echworker-for-openwrt.git" >> feeds.conf.default
-
-    # --------------------------------------------------
-    # 4️⃣ 更新 feeds + 安装
-    # --------------------------------------------------
-    - name: Update & install feeds
-      run: |
-        cd openwrt
+        echo "src-link echworker https://github.com/ntbowen/echworker-for-openwrt.git" >> feeds.conf.default
         ./scripts/feeds update -a
         ./scripts/feeds install -a
 
-    # --------------------------------------------------
-    # 5️⃣ 显式生成 .config（SDK 模式必须）
-    # --------------------------------------------------
-    - name: Prepare .config
+        LUCI_MK=$(find package/feeds/echworker -maxdepth 2 -name Makefile | grep luci || true)
+        if [ -n "$LUCI_MK" ]; then
+          sed -i 's/+dns2socks//g' "$LUCI_MK"
+        fi
+
+    - name: Configure target
       run: |
         cd openwrt
-        cat > .config <<'EOF'
-        CONFIG_TARGET_armvirt=y
-        CONFIG_TARGET_armvirt_64=y
-        CONFIG_PACKAGE_echworker-go=m
-        CONFIG_PACKAGE_luci-app-echworkers=m
-        EOF
+        # 保留增量构建 .config
+        if [ ! -f .config ]; then
+          cat > .config << 'EOF'
+CONFIG_TARGET_armvirt=y
+CONFIG_TARGET_armvirt_64=y
+CONFIG_TARGET_armvirt_64_Default=y
+CONFIG_CCACHE=y
+CONFIG_PACKAGE_echworker-go=m
+CONFIG_PACKAGE_luci-app-echworkers=m
+EOF
+          make defconfig
+        fi
 
-        make defconfig
-
-    # --------------------------------------------------
-    # 6️⃣ 构建 toolchain（一次即可，后面靠 cache）
-    # --------------------------------------------------
-    - name: Build toolchain
+    - name: Build toolchain (if missing)
       run: |
         cd openwrt
-        make toolchain/install -j$(nproc)
+        if [ ! -d staging_dir/toolchain ]; then
+          make toolchain/install -j$(nproc)
+        else
+          echo "Toolchain cache exists, skipping rebuild"
+        fi
 
-    # --------------------------------------------------
-    # 7️⃣ 编译 echworker + luci
-    # --------------------------------------------------
-    - name: Build echworker packages
+    - name: Build echworker package
       run: |
         cd openwrt
         make package/echworker-go/compile -j$(nproc) V=s
+
+    - name: Build luci-app package
+      run: |
+        cd openwrt
         make package/luci-app-echworkers/compile -j$(nproc) V=s
 
-    # --------------------------------------------------
-    # 8️⃣ 收集 ipk
-    # --------------------------------------------------
     - name: Collect IPKs
       run: |
         mkdir -p output
-        find openwrt/bin/packages -name "*echworker*.ipk" -exec cp -v {} output/ \;
+        find openwrt/bin/packages -name "*echworker*.ipk" -exec cp {} output/ \;
 
-    # --------------------------------------------------
-    # 9️⃣ 发布到 GitHub Releases
-    # --------------------------------------------------
     - name: Release
-      uses: softprops/action-gh-release@v2
+      uses: softprops/action-gh-release@v1
       with:
-        tag_name: echworker-${{ github.run_number }}
-        name: echworker SDK build ${{ github.run_number }}
+        tag_name: echworker-n1-${{ github.run_number }}
         files: output/*.ipk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
