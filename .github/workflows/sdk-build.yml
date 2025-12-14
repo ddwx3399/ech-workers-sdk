@@ -68,12 +68,15 @@ jobs:
       - name: Build echworker
         run: |
           cd openwrt
-          make package/echworker-go/compile -j$(nproc) V=s
-
+          make package/feeds/echworker/echworker-go/compile -j$(nproc) V=s
+          ls openwrt/package/feeds/echworker
+          
+          
       - name: Build luci-app
         run: |
           cd openwrt
-          make package/luci-app-echworkers/compile -j$(nproc) V=s
+          make package/feeds/echworker/luci-app-echworkers/compile -j$(nproc) V=s
+          ls openwrt/package/feeds/luci-app-echworkers
 
       - name: Collect IPK
         run: |
